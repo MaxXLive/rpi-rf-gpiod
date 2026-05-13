@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "rpi-rf-lgpio"
+version = "1.0.0"
+description = "433 MHz RF transmitter/receiver for Raspberry Pi using lgpio (Pi 3/4/5)"
+readme = "README.md"
+license = "BSD-3-Clause"
+requires-python = ">=3.9"
+authors = [
+    { name = "MaxXLive" },
+]
+keywords = ["raspberry", "pi", "433mhz", "rf", "lgpio", "home-automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "lgpio",
+]
+
+[project.urls]
+Homepage = "https://github.com/MaxXLive/rpi-rf-lgpio"
+Repository = "https://github.com/MaxXLive/rpi-rf-lgpio"
+Issues = "https://github.com/MaxXLive/rpi-rf-lgpio/issues"
+
+[project.scripts]
+rf_send = "rpi_rf_lgpio.cli:send_main"
+rf_receive = "rpi_rf_lgpio.cli:receive_main"
+
+[tool.setuptools.packages.find]
+include = ["rpi_rf_lgpio*"]
