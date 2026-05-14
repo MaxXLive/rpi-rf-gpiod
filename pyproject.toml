@@ -3,16 +3,16 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rpi-rf-lgpio"
+name = "rpi-rf-gpiod"
 version = "1.0.0"
-description = "433 MHz RF transmitter/receiver for Raspberry Pi using lgpio (Pi 3/4/5)"
+description = "433 MHz RF transmitter/receiver for Raspberry Pi using gpiod (Pi 3/4/5)"
 readme = "README.md"
 license = "BSD-3-Clause"
 requires-python = ">=3.9"
 authors = [
     { name = "MaxXLive" },
 ]
-keywords = ["raspberry", "pi", "433mhz", "rf", "lgpio", "home-automation"]
+keywords = ["raspberry", "pi", "433mhz", "rf", "gpiod", "home-automation"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -27,17 +27,17 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "lgpio",
+    "gpiod>=2.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/MaxXLive/rpi-rf-lgpio"
-Repository = "https://github.com/MaxXLive/rpi-rf-lgpio"
-Issues = "https://github.com/MaxXLive/rpi-rf-lgpio/issues"
+Homepage = "https://github.com/MaxXLive/rpi-rf-gpiod"
+Repository = "https://github.com/MaxXLive/rpi-rf-gpiod"
+Issues = "https://github.com/MaxXLive/rpi-rf-gpiod/issues"
 
 [project.scripts]
-rf_send = "rpi_rf_lgpio.cli:send_main"
-rf_receive = "rpi_rf_lgpio.cli:receive_main"
+rf_send = "rpi_rf_gpiod.cli:send_main"
+rf_receive = "rpi_rf_gpiod.cli:receive_main"
 
 [tool.setuptools.packages.find]
-include = ["rpi_rf_lgpio*"]
+include = ["rpi_rf_gpiod*"]

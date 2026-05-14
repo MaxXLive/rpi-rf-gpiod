@@ -1,4 +1,4 @@
-"""433 MHz RF Transmitter using lgpio.
+"""433 MHz RF Transmitter using gpiod.
 
 Sends RF codes via a connected transmitter module.
 Compatible with PT2262-based devices and rc-switch protocols.
@@ -6,15 +6,17 @@ Compatible with PT2262-based devices and rc-switch protocols.
 
 import time
 import logging
-import lgpio
+
+import gpiod
+from gpiod.line import Direction, Value
 
 from .protocols import PROTOCOLS
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _detect_chip() -> int:
-    """Auto-detect the GPIO chip number.
+def _detect_chip() -> str:
+    """Auto-detect the GPIO chip path.
 
     Pi 5 uses /dev/gpiochip4 (RP1), all others use /dev/gpiochip0.
     """
@@ -22,10 +24,10 @@ def _detect_chip() -> int:
         with open("/proc/device-tree/model", "r") as f:
             model = f.read()
         if "Pi 5" in model:
-            return 4
+            return "/dev/gpiochip4"
     except OSError:
         pass
-    return 0
+    return "/dev/gpiochip0"
 
 
 class RFTransmitter:
@@ -33,31 +35,35 @@ class RFTransmitter:
 
     Args:
         gpio: BCM GPIO pin number connected to the transmitter data pin.
-        chip: GPIO chip number. None for auto-detection.
+        chip: GPIO chip path (e.g. "/dev/gpiochip0"). None for auto-detection.
     """
 
-    def __init__(self, gpio: int = 17, chip: int | None = None):
+    def __init__(self, gpio: int = 17, chip: str | None = None):
         self.gpio = gpio
         self.chip = chip if chip is not None else _detect_chip()
-        self._handle = None
+        self._request = None
 
     def enable(self) -> None:
-        """Open GPIO handle and claim the TX pin as output."""
-        if self._handle is not None:
+        """Open GPIO and claim the TX pin as output."""
+        if self._request is not None:
             return
-        self._handle = lgpio.gpiochip_open(self.chip)
-        lgpio.gpio_claim_output(self._handle, self.gpio, 0)
-        _LOGGER.debug("TX enabled on GPIO %d (chip %d)", self.gpio, self.chip)
+        self._request = gpiod.request_lines(
+            self.chip,
+            consumer="rpi-rf-tx",
+            config={
+                self.gpio: gpiod.LineSettings(
+                    direction=Direction.OUTPUT,
+                    output_value=Value.INACTIVE,
+                ),
+            },
+        )
+        _LOGGER.debug("TX enabled on GPIO %d (%s)", self.gpio, self.chip)
 
     def disable(self) -> None:
         """Release GPIO resources."""
-        if self._handle is not None:
-            try:
-                lgpio.gpio_free(self._handle, self.gpio)
-                lgpio.gpiochip_close(self._handle)
-            except lgpio.error:
-                pass
-            self._handle = None
+        if self._request is not None:
+            self._request.release()
+            self._request = None
             _LOGGER.debug("TX disabled")
 
     def send(
@@ -80,14 +86,11 @@ class RFTransmitter:
         Returns:
             True if transmission succeeded.
         """
-        if self._handle is None:
+        if self._request is None:
             self.enable()
 
         proto = PROTOCOLS[protocol]
-        if pulselength is not None:
-            pl = pulselength
-        else:
-            pl = proto.pulselength
+        pl = pulselength if pulselength is not None else proto.pulselength
 
         waveform = self._make_waveform(code, proto, pl, length)
 
@@ -96,12 +99,13 @@ class RFTransmitter:
             code, protocol, pl, repeat, length,
         )
 
+        req = self._request
+        gpio = self.gpio
         for _ in range(repeat):
-            for level, duration_us in waveform:
-                lgpio.gpio_write(self._handle, self.gpio, level)
+            for value, duration_us in waveform:
+                req.set_value(gpio, value)
                 _sleep(duration_us / 1_000_000)
-            # End LOW
-            lgpio.gpio_write(self._handle, self.gpio, 0)
+            req.set_value(gpio, Value.INACTIVE)
 
         return True
 
@@ -111,26 +115,21 @@ class RFTransmitter:
         proto,
         pulselength: int,
         length: int,
-    ) -> list[tuple[int, int]]:
-        """Build the (level, duration_µs) sequence for a code.
-
-        Returns a list of (0/1, microseconds) tuples representing
-        the complete waveform for one transmission (sync + data bits).
-        """
+    ) -> list[tuple[Value, int]]:
+        """Build the (Value, duration_µs) sequence for a code."""
         waveform = []
 
-        # Data bits (MSB first)
         for i in range(length - 1, -1, -1):
             if code & (1 << i):
-                waveform.append((1, pulselength * proto.one_high))
-                waveform.append((0, pulselength * proto.one_low))
+                waveform.append((Value.ACTIVE, pulselength * proto.one_high))
+                waveform.append((Value.INACTIVE, pulselength * proto.one_low))
             else:
-                waveform.append((1, pulselength * proto.zero_high))
-                waveform.append((0, pulselength * proto.zero_low))
+                waveform.append((Value.ACTIVE, pulselength * proto.zero_high))
+                waveform.append((Value.INACTIVE, pulselength * proto.zero_low))
 
         # Sync pulse (after data, per rc-switch convention)
-        waveform.append((1, pulselength * proto.sync_high))
-        waveform.append((0, pulselength * proto.sync_low))
+        waveform.append((Value.ACTIVE, pulselength * proto.sync_high))
+        waveform.append((Value.INACTIVE, pulselength * proto.sync_low))
 
         return waveform
 

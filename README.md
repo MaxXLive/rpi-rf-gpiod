@@ -1,25 +1,24 @@
-# rpi-rf-lgpio
+# rpi-rf-gpiod
 
-Modern 433 MHz RF library for Raspberry Pi using **lgpio** — works on **Pi 3B, 4, and 5**.
+Modern 433 MHz RF library for Raspberry Pi using **gpiod** — works on **Pi 3B, 4, and 5**.
 
 Drop-in replacement for [rpi-rf](https://github.com/milaq/rpi-rf) with:
 - ✅ **Pi 5 support** (RP1 chip, `/dev/gpiochip4`)
-- ✅ **Interrupt-based RX** (lgpio callbacks, ~0% CPU idle)
+- ✅ **Kernel 6.12+ compatible** (gpiod edge detection works where lgpio/RPi.GPIO don't)
+- ✅ **Interrupt-based RX** (kernel edge events with nanosecond timestamps, ~0% CPU idle)
 - ✅ **No GIL contention** between TX and RX
 - ✅ **No daemon required** (unlike pigpio)
-- ✅ **Kernel 6.12+ compatible** (no broken `GPIO.add_event_detect`)
 
 ## Installation
 
 ```bash
-pip install rpi-rf-lgpio
+pip install rpi-rf-gpiod
 ```
 
-**Prerequisites**: `lgpio` requires the `swig` and `python3-dev` packages:
+**Prerequisites**: `gpiod` Python bindings (usually pre-installed on Raspberry Pi OS Bookworm):
 
 ```bash
-sudo apt install swig python3-dev
-pip install lgpio
+sudo apt install python3-libgpiod
 ```
 
 ## Quick Start
@@ -27,7 +26,7 @@ pip install lgpio
 ### Send a code
 
 ```python
-from rpi_rf_lgpio import RFTransmitter
+from rpi_rf_gpiod import RFTransmitter
 
 with RFTransmitter(gpio=17) as tx:
     tx.send(code=4539729, protocol=1, repeat=10)
@@ -36,7 +35,7 @@ with RFTransmitter(gpio=17) as tx:
 ### Receive codes
 
 ```python
-from rpi_rf_lgpio import RFReceiver
+from rpi_rf_gpiod import RFReceiver
 
 def on_code(code, protocol, pulselength):
     print(f"Received: {code} (proto={protocol}, pl={pulselength}µs)")
@@ -76,6 +75,7 @@ rf_receive --gpio 16
 | `register_callback(cb)` | Add a `(code, proto, pl) -> None` callback |
 | `unregister_callback(cb)` | Remove a callback |
 | `set_tx_guard(duration=1.0)` | Ignore codes for N seconds (anti self-reception) |
+| `clear_tx_guard(cooldown=0.5)` | Resume receiving after TX |
 | `start_capture()` | Begin buffering codes (for learn mode) |
 | `stop_capture()` | Stop and return buffered `[(code, proto, pl), ...]` |
 | `get_capture_snapshot()` | Get buffer copy without stopping |
@@ -93,13 +93,26 @@ rf_receive --gpio 16
 
 ## Why not rpi-rf?
 
-| Feature | rpi-rf | rpi-rf-lgpio |
+| Feature | rpi-rf | rpi-rf-gpiod |
 |---------|--------|-------------|
-| GPIO backend | RPi.GPIO (unmaintained) | lgpio (active, kernel-supported) |
+| GPIO backend | RPi.GPIO (unmaintained) | gpiod (active, kernel-supported) |
 | Pi 5 | ❌ | ✅ |
-| RX method | GPIO.add_event_detect (broken 6.12+) | lgpio.callback (interrupt-based) |
+| RX method | GPIO.add_event_detect (broken 6.12+) | gpiod edge events (works on 6.12+) |
 | CPU usage (RX idle) | ~15% (polling workaround) | ~0% |
-| GIL contention | Yes (TX vs RX fight for GIL) | No (callbacks are lightweight) |
+| GIL contention | Yes (TX vs RX fight for GIL) | No (edge events are lightweight) |
+
+## Why gpiod over lgpio?
+
+Both lgpio and RPi.GPIO edge detection are **broken on kernel 6.12+**.
+We tested all available GPIO libraries on a Pi 1B+ with kernel 6.12.47:
+
+| Library | Edge Detection |
+|---------|---------------|
+| lgpio 0.2.2 | ❌ Broken |
+| RPi.GPIO | ❌ Broken |
+| **gpiod 2.2** | **✅ Works** |
+| gpiozero 2.0 | ✅ Works (uses gpiod internally) |
+| pigpio | ✅ Works (requires daemon) |
 
 ## Hardware
 
