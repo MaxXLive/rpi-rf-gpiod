@@ -204,8 +204,11 @@ class RFReceiver:
         if duration_us < 50:
             return
 
-        # Sync gap detection — long LOW pulse signals end of packet
-        if duration_us > 4300:
+        # Sync gap detection — long pulse signals end of packet.
+        # Must be below the shortest sync_low across all protocols
+        # (Protocol 4: 380µs × 6 = 2280µs) but above the longest
+        # data pulse (Protocol 2: 650µs × 3 = 1950µs).
+        if duration_us > 2000:
             if 0 < self._change_count < MAX_CHANGES:
                 self._timings[self._change_count] = duration_us
                 self._try_decode()
